@@ -17,7 +17,7 @@ const createProduct = async (req, reply) => {
 };
 
 const getAllProducts = async (req, reply) => {
-  console.log(req.query, "88888");
+  console.log(req.headers["x-tenant-id"], "88888");
   try {
     const {
       category,
@@ -30,7 +30,7 @@ const getAllProducts = async (req, reply) => {
     const parsedMinPrice = Number(minPrice);
     const parsedMaxPrice = Number(maxPrice);
 
-    let query = {};
+    let query = { tenantId: req.headers["x-tenant-id"] };
 
     if (category) {
       query.category = category;
@@ -60,7 +60,7 @@ const getAllProducts = async (req, reply) => {
   } catch (error) {
     reply.status(500).send({
       sucess: false,
-      message: "Getting error while fetching products",
+      message: "Getting error while fetching products " + error.message,
     });
   }
 };

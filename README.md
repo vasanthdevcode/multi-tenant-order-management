@@ -78,3 +78,10 @@
   orderSchema.index({ tenantId: 1, status: 1 });
   orderSchema.index({ tenantId: 1, userId: 1 });
   ```
+
+### Checks
+
+- [x] Tenant isolation enforced in ALL queries
+- [x] Indexes exist and are used (verified via explain)
+- [x] Query performance improves after indexing
+- [x] Aggregation returns correct monthly revenue

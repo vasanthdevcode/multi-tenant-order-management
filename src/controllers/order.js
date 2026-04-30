@@ -18,14 +18,18 @@ const createOrder = async (req, reply) => {
 const getAllOrders = async (req, reply) => {
   const { sort } = req.query;
   try {
-    const orders = await Order.find().sort({
+    const orders = await Order.find({
+      tenantId: req.headers["x-tenant-id"],
+    }).sort({
       createdAt: sort === "asc" ? 1 : -1,
     });
+
     reply.status(200).send({ sucess: true, data: orders });
   } catch (error) {
-    reply
-      .status(500)
-      .send({ sucess: false, message: "Getting errors while fetching orders" });
+    reply.status(500).send({
+      sucess: false,
+      message: "Getting errors while fetching orders " + error.message,
+    });
   }
 };
 

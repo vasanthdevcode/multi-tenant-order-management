@@ -2,10 +2,9 @@ import mongoose from "mongoose";
 import { Order } from "../models/Order.js";
 
 const getRevenueAnalytics = async (req, reply) => {
-  const { tenantId } = req.params;
   try {
     const revenue = await Order.aggregate([
-      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId) } },
+      { $match: { tenantId: req.headers["x-tenant-id"] } },
       {
         $unwind: "$items", // break array into individual rows
       },
