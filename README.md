@@ -79,7 +79,7 @@
   orderSchema.index({ tenantId: 1, userId: 1 });
   ```
 
-### Checks:
+### Checks
 
 - [x] Tenant isolation enforced in ALL queries
 - [x] Indexes exist and are used (verified via explain)
