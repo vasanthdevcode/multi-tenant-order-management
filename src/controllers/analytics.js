@@ -4,17 +4,14 @@ import { Order } from "../models/Order.js";
 const getRevenueAnalytics = async (req, reply) => {
   try {
     const revenue = await Order.aggregate([
-      { $match: { tenantId: req.headers["x-tenant-id"] } },
-      {
-        $unwind: "$items", // break array into individual rows
-      },
+      { $match: { tenantId: req.tenantId } },
       {
         $group: {
           _id: {
             month: { $month: "$createdAt" },
             year: { $year: "$createdAt" },
           },
-          totalRevenue: { $sum: "$items.priceAtPurchase" },
+          totalRevenue: { $sum: "$totalAmount" },
           createdOrders: {
             $sum: { $cond: [{ $eq: ["$status", "created"] }, 1, 0] },
           },

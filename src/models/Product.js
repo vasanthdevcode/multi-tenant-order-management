@@ -4,7 +4,6 @@ import { Tenant } from "./Tenant.js";
 const productSchema = new mongoose.Schema({
   tenantId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
     ref: "Tenant",
   },
   name: { type: String, required: true, trim: true },

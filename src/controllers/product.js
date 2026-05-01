@@ -2,7 +2,8 @@ import { Product } from "../models/Product.js";
 
 const createProduct = async (req, reply) => {
   try {
-    const product = await Product(req.body);
+    const product = new Product(req.body);
+    product.tenantId = req.tenantId;
     await product.save();
 
     reply
@@ -17,7 +18,6 @@ const createProduct = async (req, reply) => {
 };
 
 const getAllProducts = async (req, reply) => {
-  console.log(req.headers["x-tenant-id"], "88888");
   try {
     const {
       category,
@@ -30,7 +30,7 @@ const getAllProducts = async (req, reply) => {
     const parsedMinPrice = Number(minPrice);
     const parsedMaxPrice = Number(maxPrice);
 
-    let query = { tenantId: req.headers["x-tenant-id"] };
+    let query = { tenantId: req.tenantId };
 
     if (category) {
       query.category = category;
@@ -51,14 +51,14 @@ const getAllProducts = async (req, reply) => {
       query.price.$gte = parsedMinPrice;
       query.price.$lte = parsedMaxPrice;
     }
-    console.log(query, "***");
+
     const allProducts = await Product.find(query)
       .skip((page - 1) * limit)
       .limit(limit);
 
-    reply.status(200).send({ sucess: true, data: allProducts });
+    return reply.status(200).send({ sucess: true, data: allProducts });
   } catch (error) {
-    reply.status(500).send({
+    return reply.status(500).send({
       sucess: false,
       message: "Getting error while fetching products " + error.message,
     });
