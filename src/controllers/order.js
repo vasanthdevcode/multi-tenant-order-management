@@ -15,7 +15,6 @@ const createOrder = async (req, reply) => {
       _id: { $in: productIds },
       tenantId: req.tenantId,
     });
-    console.log("crossed..");
 
     /**
      * check products are belongs to tenant
@@ -60,7 +59,6 @@ const createOrder = async (req, reply) => {
       { $inc: { inventoryCount: -1 } },
     );
 
-    console.log(order, "Orderrrr");
     await order.save();
 
     return reply
