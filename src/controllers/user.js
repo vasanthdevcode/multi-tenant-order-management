@@ -4,6 +4,7 @@ import { getUserOrThrow } from "../utils/getUserOrThrow.js";
 const createUser = async (req, reply) => {
   try {
     const user = new User(req.body);
+    user.tenantId = req.tenantId;
     await user.save();
 
     return reply

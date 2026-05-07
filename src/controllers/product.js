@@ -1,4 +1,6 @@
+import { redis } from "../config/redis.js";
 import { Product } from "../models/Product.js";
+import { generateProductKey } from "../utils/redisKey.js";
 
 const createProduct = async (req, reply) => {
   try {
@@ -52,11 +54,31 @@ const getAllProducts = async (req, reply) => {
       query.price.$lte = parsedMaxPrice;
     }
 
-    const allProducts = await Product.find(query)
-      .skip((page - 1) * limit)
-      .limit(limit);
+    const redisProductKey = generateProductKey({
+      tenantId: req.tenantId,
+      category,
+      minPrice,
+      maxPrice,
+    });
+    console.log(redisProductKey, "redisProductKey");
+    const redisData = await redis.get(redisProductKey);
+    console.log(redisData, "*** redisData");
 
-    return reply.status(200).send({ sucess: true, data: allProducts });
+    if (redisData) {
+      console.log("CACHE_HIT");
+      console.log(await redis.keys("*"), "keys");
+      return reply
+        .status(200)
+        .send({ sucess: true, data: JSON.parse(redisData) });
+    } else {
+      console.log("CACHE_MISS");
+      const allProducts = await Product.find(query)
+        .skip((page - 1) * limit)
+        .limit(limit);
+      redis.set(redisProductKey, JSON.stringify(allProducts));
+      console.log(await redis.keys("*"), "keys");
+      return reply.status(200).send({ sucess: true, data: allProducts });
+    }
   } catch (error) {
     return reply.status(500).send({
       sucess: false,
