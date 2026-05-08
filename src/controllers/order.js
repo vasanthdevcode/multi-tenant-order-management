@@ -7,7 +7,8 @@ import { generateLockKey } from "../utils/redisKey.js";
 
 const createOrder = async (req, reply) => {
   try {
-    console.log(req.body.userId);
+    const idemKey = req.headers["idempotency-key"];
+
     const userId = req.body.userId;
     await getUserOrThrow(userId, req.tenantId);
 
@@ -56,17 +57,15 @@ const createOrder = async (req, reply) => {
     // generate minute in decimal and terminate secends count by Math.floor
     const minute = Math.floor(Date.now() / 60000);
     // key change per minute
-    const redisOrderKey = `rate_limit:${req.tenantId}:${userId}:${minute}`;
-    console.log(redisOrderKey, "redisOrderKey");
-    console.log("Redis connected:", redis.isOpen);
+    const redisRateLimitKey = `rate_limit:${req.tenantId}:${userId}:${minute}`;
+
     /**
      * if key not exist redis automatically create key with value 0 then increament by 1
      */
-    const count = await redis.incr(redisOrderKey);
-    console.log("crossed!");
+    const count = await redis.incr(redisRateLimitKey);
 
     if (count === 1) {
-      await redis.expire(redisOrderKey, 60);
+      await redis.expire(redisRateLimitKey, 60);
     }
 
     /**
@@ -79,6 +78,36 @@ const createOrder = async (req, reply) => {
       });
     }
 
+    const redisLockKey = generateLockKey({
+      tenantId: req.tenantId,
+      userId,
+      idemKey,
+    });
+    const redisIdemKey = generateIdemKey({
+      tenantId: req.tenantId,
+      userId,
+      idemKey,
+    });
+
+    const existingResponse = await redis.get(redisIdemKey);
+
+    if (existingResponse) {
+      return reply.status(201).send(JSON.parse(existingResponse));
+    }
+
+    const isLocked = await redis.set(redisLockKey, "processing", {
+      NX: true,
+      PX: 10000,
+    });
+
+    if (!isLocked) {
+      return reply
+        .status(409)
+        .semd({ sucess: false, message: "Duplicate order submission" });
+    }
+
+    const savedOrder = await order.save();
+
     /**
      * decrease inventoryCount when order placed
      */
@@ -87,32 +116,20 @@ const createOrder = async (req, reply) => {
       { $inc: { inventoryCount: -1 } },
     );
 
-    const redisLockKey = generateLockKey({ tenantId: req.tenantId, userId });
-    console.log(redisLockKey, "redisLockKey --------");
+    await redis.set(
+      redisIdemKey,
+      JSON.stringify({
+        sucess: true,
+        orderId: savedOrder._id,
+        message: "Order sucessfully created",
+      }),
+      {
+        EX: 60 * 60 * 24,
+      },
+    );
 
-    const isLocked = await redis.set(redisLockKey, "locked", {
-      NX: true,
-      PX: 10000,
-    });
-
-    console.log(isLocked, "isLocked ------");
-    if (!isLocked) {
-      return reply.status(409).send({
-        sucess: false,
-        message: "Duplicate order submission detected",
-      });
-    }
-
-    const savedOrder = await order.save();
     await redis.incr(`stats:orders:${req.tenantId}`);
     await redis.incrBy(`stats:revenue:${req.tenantId}`, order.totalAmount);
-    console.log(
-      await redis.mGet([
-        `stats:orders:${req.tenantId}`,
-        `stats:revenue:${req.tenantId}`,
-      ]),
-      "orderss ***",
-    );
 
     await redis.xAdd("queue:email:orders", "*", {
       tenantId: req.tenantId.toString(),
@@ -121,9 +138,11 @@ const createOrder = async (req, reply) => {
       emailType: "ORDER_CONFIRMATION",
     });
 
-    return reply
-      .status(201)
-      .send({ sucess: true, message: "Order sucessfully created" });
+    return reply.status(201).send({
+      sucess: true,
+      orderId: savedOrder._id,
+      message: "Order sucessfully created",
+    });
   } catch (error) {
     return reply.status(400).send({
       sucess: false,
@@ -133,13 +152,31 @@ const createOrder = async (req, reply) => {
 };
 
 const getAllOrders = async (req, reply) => {
-  const { sort } = req.query;
+  const { sort, status, startDate, endDate, page = 1, limit = 10 } = req.query;
   try {
-    const orders = await Order.find({
-      tenantId: req.tenantId,
-    }).sort({
-      createdAt: sort === "asc" ? 1 : -1,
-    });
+    const query = { tenantId: req.tenantId };
+    if (status) {
+      query.status = status;
+    }
+    if (startDate && endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      query.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(end),
+      };
+    }
+    const sortOptions = {};
+    if (sort) {
+      if (sort === "asc") sortOptions.createdAt = 1;
+      if (sort === "desc") sortOptions.createdAt = -1;
+    }
+    console.log(sortOptions, "sorttt");
+    const orders = await Order.find(query)
+      .sort(sortOptions)
+      .skip((page - 1) * limit)
+      .limit(limit);
 
     return reply.status(200).send({ sucess: true, data: orders });
   } catch (error) {

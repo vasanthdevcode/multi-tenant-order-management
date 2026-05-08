@@ -3,21 +3,41 @@ import { Order } from "../models/Order.js";
 
 const getRevenueAnalytics = async (req, reply) => {
   try {
+    const { startDate, endDate } = req.query;
+    const query = { tenantId: req.tenantId };
+    if (startDate && endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = {
+        $gte: new Date(startDate),
+        $lte: end,
+      };
+    }
     const revenue = await Order.aggregate([
-      { $match: { tenantId: req.tenantId } },
+      { $match: query },
       {
         $group: {
           _id: {
+            date: { $dayOfMonth: "$createdAt" },
             month: { $month: "$createdAt" },
             year: { $year: "$createdAt" },
           },
           totalRevenue: { $sum: "$totalAmount" },
-          createdOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "created"] }, 1, 0] },
+          paidOrders: {
+            $sum: { $cond: [{ $eq: ["$status", "paid"] }, 1, 0] },
           },
           cancelledOrder: {
-            $sum: { $cond: [{ $eq: ["$status", "cancel"] }, 1, 0] },
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
           },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          totalRevenue: 1,
+          paidOrders: 1,
+          cancelledOrder: 1,
+          averageOrderValue: { $avg: ["$paidOrders", "$cancelledOrder"] },
         },
       },
     ]);

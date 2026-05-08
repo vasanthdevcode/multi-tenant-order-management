@@ -26,9 +26,11 @@ const getAllProducts = async (req, reply) => {
       minPrice,
       maxPrice,
       tags,
+      sort,
       page = 1,
       limit = 10,
     } = req.query;
+    console.log(tags, "tag**");
     const parsedMinPrice = Number(minPrice);
     const parsedMaxPrice = Number(maxPrice);
 
@@ -54,30 +56,57 @@ const getAllProducts = async (req, reply) => {
       query.price.$lte = parsedMaxPrice;
     }
 
+    let sortOption = {};
+
+    if (sort) {
+      if (sort === "price_asc") {
+        sortOption.price = 1;
+      }
+
+      if (sort === "price_desc") {
+        sortOption.price = -1;
+      }
+    }
     const redisProductKey = generateProductKey({
       tenantId: req.tenantId,
       category,
       minPrice,
       maxPrice,
+      sort,
     });
+
     console.log(redisProductKey, "redisProductKey");
     const redisData = await redis.get(redisProductKey);
     console.log(redisData, "*** redisData");
+    const totalItems = await Product.countDocuments({ tenantId: req.tenantId });
 
     if (redisData) {
       console.log("CACHE_HIT");
-      console.log(await redis.keys("*"), "keys");
-      return reply
-        .status(200)
-        .send({ sucess: true, data: JSON.parse(redisData) });
+      // console.log(await redis.keys("*"), "keys");
+      return reply.status(200).send({
+        sucess: true,
+        data: JSON.parse(redisData),
+        page,
+        limit,
+        total: totalItems,
+      });
     } else {
       console.log("CACHE_MISS");
       const allProducts = await Product.find(query)
+        .sort(sortOption)
         .skip((page - 1) * limit)
         .limit(limit);
       redis.set(redisProductKey, JSON.stringify(allProducts));
       console.log(await redis.keys("*"), "keys");
-      return reply.status(200).send({ sucess: true, data: allProducts });
+      return reply
+        .status(200)
+        .send({
+          sucess: true,
+          data: allProducts,
+          page,
+          limit,
+          total: totalItems,
+        });
     }
   } catch (error) {
     return reply.status(500).send({

@@ -35,7 +35,7 @@ export const loginController = async (req, reply) => {
       { EX: 60 * 60 },
     );
 
-    return reply.status(200).send({ sucess: true, token });
+    return reply.status(200).send({ sucess: true, token, expiresIn: 60 * 60 });
   } catch (error) {
     return reply
       .status(500)
